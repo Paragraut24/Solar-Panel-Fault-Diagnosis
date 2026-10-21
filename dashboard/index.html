@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar PV Fault Diagnosis - Telemetry Dashboard</title>
+  <!-- Chart.js for real-time rolling charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Firebase App & Database Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-primary: #0284c7;
+      --accent-hover: #0369a1;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+      --color-danger: #ef4444;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-family);
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .status-badge.connected {
+      background-color: rgba(16, 185, 129, 0.2);
+      color: var(--color-success);
+    }
+
+    .config-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    button {
+      background-color: var(--accent-primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .metric-unit {
+      font-size: 0.875rem;
+      font-weight: normal;
+      color: var(--text-secondary);
+      margin-left: 4px;
+    }
+
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .chart-section {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 320px;
+      width: 100%;
+    }
+
+    .table-section {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+
+    th {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+    }
+
+    tr:hover td {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .tag-normal {
+      background-color: rgba(16, 185, 129, 0.2);
+      color: var(--color-success);
+    }
+
+    .tag-fault {
+      background-color: rgba(239, 68, 68, 0.2);
+      color: var(--color-danger);
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+      .metrics-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Solar PV Fault Diagnosis Dashboard</h1>
+        <p class="subtitle">Real-time edge telemetry monitoring via Firebase RTDB</p>
+      </div>
+      <div>
+        <span id="connectionBadge" class="status-badge">Disconnected</span>
+      </div>
+    </header>
+
+    <!-- Configuration Card -->
+    <div class="config-card">
+      <div class="form-group">
+        <label for="dbUrl">Firebase Database URL</label>
+        <input type="text" id="dbUrl" placeholder="https://<project-id>-default-rtdb.firebaseio.com">
+      </div>
+      <div class="form-group">
+        <label for="dbPath">Telemetry Node Path</label>
+        <input type="text" id="dbPath" value="telemetry">
+      </div>
+      <button id="connectBtn" type="button">Connect Stream</button>
+    </div>
+
+    <!-- Live Metric Cards -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Panel Voltage</div>
+        <div class="metric-value"><span id="valVoltage">0.00</span><span class="metric-unit">V</span></div>
+        <div class="metric-sub">INA219 bus terminal</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Panel Current</div>
+        <div class="metric-value"><span id="valCurrent">0.000</span><span class="metric-unit">A</span></div>
+        <div class="metric-sub">Shunt measurement</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Measured Power</div>
+        <div class="metric-value"><span id="valPower">0.00</span><span class="metric-unit">W</span></div>
+        <div class="metric-sub">P_meas = V x I</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Panel Temperature</div>
+        <div class="metric-value"><span id="valTemp">0.0</span><span class="metric-unit">deg C</span></div>
+        <div class="metric-sub">Surface thermistor</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Irradiance Proxy</div>
+        <div class="metric-value"><span id="valLux">0</span><span class="metric-unit">lux</span></div>
+        <div class="metric-sub">BH1750 sensor</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Operating State</div>
+        <div class="metric-value" style="font-size: 1.25rem;" id="valLabel">NORMAL</div>
+        <div class="metric-sub" id="valExperiment">Exp: EXP-001</div>
+      </div>
+    </div>
+
+    <!-- Real-time Rolling Chart -->
+    <div class="chart-section">
+      <div class="section-title">Telemetry Trend (Rolling 5 Minutes)</div>
+      <div class="chart-container">
+        <canvas id="telemetryChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Telemetry Table -->
+    <div class="table-section">
+      <div class="section-title">Recent Telemetry Records</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Exp ID</th>
+            <th>Label</th>
+            <th>Voltage (V)</th>
+            <th>Current (A)</th>
+            <th>Power (W)</th>
+            <th>Temp (deg C)</th>
+            <th>Proxy (lux)</th>
+            <th>Load</th>
+          </tr>
+        </thead>
+        <tbody id="telemetryTableBody">
+          <tr>
+            <td colspan="9" style="text-align: center; color: var(--text-secondary);">Awaiting Firebase telemetry stream...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const MAX_CHART_POINTS = 60;
+    const recentRecords = [];
+
+    // Chart.js initialization
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Power (W)',
+            data: [],
+            borderColor: '#0284c7',
+            backgroundColor: 'rgba(2, 132, 199, 0.1)',
+            yAxisID: 'yPower',
+            tension: 0.25,
+            fill: true
+          },
+          {
+            label: 'Irradiance Proxy (lux)',
+            data: [],
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.05)',
+            yAxisID: 'yLux',
+            tension: 0.25,
+            borderDash: [4, 4]
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { color: '#334155' },
+            ticks: { color: '#94a3b8', maxRotation: 0 }
+          },
+          yPower: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Power (W)', color: '#0284c7' },
+            grid: { color: '#334155' },
+            ticks: { color: '#94a3b8' }
+          },
+          yLux: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Irradiance (lux)', color: '#f59e0b' },
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#94a3b8' }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: '#f8fafc' } }
+        }
+      }
+    });
+
+    function formatTime(timestamp) {
+      if (!timestamp) return new Date().toLocaleTimeString();
+      const date = typeof timestamp === 'number' && timestamp < 1e11 ? new Date(timestamp * 1000) : new Date(timestamp);
+      return isNaN(date.getTime()) ? String(timestamp) : date.toLocaleTimeString();
+    }
+
+    function updateDashboard(data) {
+      if (!data) return;
+
+      const v = parseFloat(data.voltage_v || 0);
+      const i = parseFloat(data.current_a || 0);
+      const p = parseFloat(data.power_w || (v * i));
+      const t = parseFloat(data.panel_temp_c || 0);
+      const lux = parseFloat(data.g_proxy || 0);
+      const label = data.label || 'normal';
+      const expId = data.experiment_id || 'EXP-001';
+      const timeStr = formatTime(data.timestamp);
+
+      document.getElementById('valVoltage').textContent = v.toFixed(2);
+      document.getElementById('valCurrent').textContent = i.toFixed(3);
+      document.getElementById('valPower').textContent = p.toFixed(2);
+      document.getElementById('valTemp').textContent = t.toFixed(1);
+      document.getElementById('valLux').textContent = Math.round(lux);
+      document.getElementById('valLabel').textContent = label.toUpperCase();
+      document.getElementById('valExperiment').textContent = 'Exp: ' + expId;
+
+      // Update Chart
+      chart.data.labels.push(timeStr);
+      chart.data.datasets[0].data.push(p);
+      chart.data.datasets[1].data.push(lux);
+
+      if (chart.data.labels.length > MAX_CHART_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
+      }
+      chart.update();
+
+      // Update Table
+      recentRecords.unshift({
+        timeStr: timeStr,
+        expId: expId,
+        label: label,
+        v: v.toFixed(2),
+        i: i.toFixed(3),
+        p: p.toFixed(2),
+        t: t.toFixed(1),
+        lux: Math.round(lux),
+        load: data.load_state || 'resistive'
+      });
+
+      if (recentRecords.length > 20) {
+        recentRecords.pop();
+      }
+
+      const tbody = document.getElementById('telemetryTableBody');
+      tbody.innerHTML = recentRecords.map(r => `
+        <tr>
+          <td>${r.timeStr}</td>
+          <td>${r.expId}</td>
+          <td><span class="tag ${r.label === 'normal' ? 'tag-normal' : 'tag-fault'}">${r.label}</span></td>
+          <td>${r.v}</td>
+          <td>${r.i}</td>
+          <td>${r.p}</td>
+          <td>${r.t}</td>
+          <td>${r.lux}</td>
+          <td>${r.load}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Connect to Firebase RTDB
+    document.getElementById('connectBtn').addEventListener('click', () => {
+      const dbUrl = document.getElementById('dbUrl').value.trim();
+      const dbPath = document.getElementById('dbPath').value.trim() || 'telemetry';
+      const badge = document.getElementById('connectionBadge');
+
+      if (!dbUrl) {
+        alert('Please enter your Firebase Database URL.');
+        return;
+      }
+
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp({ databaseURL: dbUrl });
+        }
+        const db = firebase.database();
+        const telemetryRef = db.ref(dbPath);
+
+        badge.textContent = 'Listening...';
+        badge.className = 'status-badge connected';
+
+        // Listen for new telemetry entries added
+        telemetryRef.limitToLast(1).on('child_added', snapshot => {
+          const val = snapshot.val();
+          updateDashboard(val);
+        });
+      } catch (err) {
+        badge.textContent = 'Error';
+        badge.className = 'status-badge';
+        alert('Firebase connection error: ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
