@@ -1,0 +1,54 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+secrets.h
+config.local.h
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Embedded & Firmware (PlatformIO, Arduino, ESP-IDF)
+.pio/
+.pioenvs/
+.piolibdeps/
+*.bin
+*.hex
+*.elf
+*.map
+
+# IDEs & Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS Generated
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs & Temporary Files
+*.log
+logs/
+tmp/
+scratch/
